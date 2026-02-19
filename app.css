@@ -1,0 +1,192 @@
+:root{
+  --bg:#0b0b0b;
+  --panel:#0f0f0f;
+  --card:#121212;
+  --border:#2a2a2a;
+
+  --text:#f5f5f5;
+  --muted:#bdbdbd;
+
+  --red:#d10000;
+  --red700:#a80000;
+
+  --radius:18px;
+  --shadow:0 18px 40px rgba(0,0,0,.45);
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background: radial-gradient(1200px 600px at 50% -10%, rgba(209,0,0,.18), transparent 55%), var(--bg);
+  color:var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+a{color:inherit;}
+.app{min-height:100%; display:flex; flex-direction:column;}
+
+.topbar{
+  position:sticky; top:0; z-index:50;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  padding:10px 12px;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+
+.brand{
+  font-weight:900;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  font-size:.95rem;
+}
+.brand .accent{color:var(--red);}
+
+.subbar{
+  background: rgba(255,255,255,.04);
+  border-bottom:1px solid var(--border);
+  padding:10px 12px;
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.tab{
+  font-weight:900;
+  letter-spacing:.8px;
+  text-transform:uppercase;
+  font-size:.82rem;
+}
+.badge{
+  display:inline-flex; align-items:center; justify-content:center;
+  height:22px; min-width:30px; padding:0 8px;
+  border-radius:999px;
+  background:var(--red); color:#fff;
+  font-weight:900; font-size:.8rem;
+  margin-left:.5rem;
+}
+
+.banner{
+  padding:14px 12px;
+  border-bottom:1px solid var(--border);
+  background:
+    radial-gradient(900px 240px at 20% 0%, rgba(209,0,0,.20), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  display:flex; gap:12px; align-items:center;
+}
+.logo{
+  width:62px; height:62px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; letter-spacing:.5px;
+}
+.bannerTitle{margin:0; font-weight:900;}
+.bannerSub{margin:0; color:var(--muted); font-size:.92rem;}
+
+.container{
+  padding:14px 12px 18px;
+  width:100%;
+  max-width:980px;
+  margin:0 auto;
+  flex:1;
+}
+
+.card{
+  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  border:1px solid var(--border);
+  border-radius:20px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.cardH{padding:16px 16px 12px; border-bottom:1px solid var(--border);}
+.cardB{padding:16px;}
+.divider{
+  height:2px;
+  background:linear-gradient(90deg, transparent, var(--red), transparent);
+  border-radius:999px;
+  opacity:.9;
+  margin-top:10px;
+}
+
+.muted{color:var(--muted);}
+
+.btn{
+  border:0;
+  border-radius:14px;
+  padding:10px 12px;
+  font-weight:900;
+  letter-spacing:.4px;
+  cursor:pointer;
+}
+.btn:active{transform:scale(.99);}
+.btnRed{background:var(--red); color:#fff;}
+.btnRed:hover{background:var(--red700);}
+.btnOutline{
+  background:transparent;
+  border:1px solid rgba(255,255,255,.20);
+  color:var(--text);
+}
+.btnOutline:hover{background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.28);}
+
+.input{
+  width:100%;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px 12px;
+  color:var(--text);
+  outline:none;
+}
+label{display:block; font-weight:800; margin-bottom:6px;}
+.field{display:grid; gap:8px; margin-bottom:12px;}
+
+.grid3{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;}
+.tile{
+  text-decoration:none;
+  display:flex; flex-direction:column; align-items:center; text-align:center;
+  gap:10px; padding:14px 8px; border-radius:16px;
+}
+.tile:hover{background:rgba(255,255,255,.04);}
+.iconBox{
+  width:64px; height:64px; border-radius:18px;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow: 0 12px 26px rgba(0,0,0,.35);
+}
+.iconBox svg{width:34px; height:34px; fill:var(--red);}
+.tileLabel{font-weight:900; font-size:.92rem; line-height:1.1;}
+
+.cameraGrid{display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;}
+@media (max-width:520px){ .cameraGrid{grid-template-columns:1fr;} }
+
+.camCard{
+  padding:14px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+}
+.camCard:hover{background: rgba(255,255,255,.06);}
+.camName{font-weight:900;}
+.camId{color:var(--muted); font-size:.85rem;}
+.small{font-size:.9rem;}
+.msgOk{color:#4CAF50;}
+.msgErr{color:#F44336;}
+.msgInfo{color:var(--muted);}
+
+/* “formato app” extra no standalone */
+html[data-mode="standalone"] body{
+  overscroll-behavior: none;
+}
+.installHint{
+  display:none;
+  margin-top:12px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04);
+  color:var(--muted);
+}

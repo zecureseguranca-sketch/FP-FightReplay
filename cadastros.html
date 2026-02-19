@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FP-FightReplay - Admin Usuários</title>
+
+  <meta name="theme-color" content="#d10000" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192x192.png" />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <a href="./menu.html"><button class="btn btnOutline" style="padding:8px 10px;">←</button></a>
+      <div class="brand">Admin Usuários</div>
+      <button id="btnLogout" class="btn btnOutline" style="padding:8px 10px;">Sair</button>
+    </div>
+
+    <div class="subbar">
+      <div class="tab" id="tabCadastro">CADASTRO</div>
+      <div class="tab" id="tabUsuarios">USUÁRIOS ATIVOS</div>
+    </div>
+
+    <div class="container" style="max-width:720px;">
+      <!-- SEÇÃO CADASTRO -->
+      <div id="sectionCadastro" class="card">
+        <div class="cardH">
+          <div class="brand" style="font-size:1rem;">Cadastrar novo usuário</div>
+          <div class="divider"></div>
+          <p class="muted small" style="margin:10px 0 0;">
+            Cria usuário no <strong>Firebase Authentication</strong> (e-mail/senha) e adiciona à lista de ativos.
+          </p>
+          <div id="whoami" class="muted small" style="margin-top:8px;"></div>
+          <div id="msgCadastro" class="small msgInfo" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="cardB">
+          <div class="field">
+            <label for="newEmail">E-mail do novo usuário</label>
+            <input id="newEmail" class="input" type="email" autocomplete="off" placeholder="usuario@dominio.com" />
+          </div>
+
+          <div class="field">
+            <label for="newPassword">Senha temporária</label>
+            <input id="newPassword" class="input" type="password" autocomplete="off" placeholder="mínimo 6 caracteres" />
+          </div>
+
+          <div style="display:grid; gap:10px;">
+            <button id="btnCreate" class="btn btnRed">Criar usuário</button>
+            <button id="btnSendReset" class="btn btnOutline">Enviar redefinição de senha</button>
+          </div>
+
+          <div class="installHint small" style="display:block; margin-top:12px;">
+            Segurança: o ideal é mover isso para Cloud Function + role admin.
+          </div>
+        </div>
+      </div>
+
+      <!-- SEÇÃO USUÁRIOS ATIVOS -->
+      <div id="sectionUsuarios" class="card" style="display:none;">
+        <div class="cardH">
+          <div class="brand" style="font-size:1rem;">Usuários ativos</div>
+          <div class="divider"></div>
+          <p class="muted small" style="margin:10px 0 0;">
+            Lista de usuários permitidos. Clique em "Remover" para desativar.
+          </p>
+          <div id="msgUsuarios" class="small msgInfo" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="cardB">
+          <div id="usersList" class="usersList"></div>
+          <div id="emptyUsers" class="muted small" style="display:none; margin-top:12px;">
+            Nenhum usuário ativo encontrado.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+
+  <script type="module">
+    import { applyPwaModeClass } from "./pwa.js";
+    import { app, auth, db } from "./firebase.js";
+
+    import {
+      onAuthStateChanged,
+      signOut,
+      getAuth,
+      createUserWithEmailAndPassword,
+      sendPasswordResetEmail
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+    import {
+      collection,
+      doc,
+      setDoc,
+      deleteDoc,
+      onSnapshot,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    applyPwaModeClass();
+
+    // ====== CONFIG: coloque aqui seus e-mails admins ======
+    const ADMIN_EMAILS = [
+      "SEU_EMAIL_ADMIN_AQUI@dominio.com"
+      // "outroadmin@dominio.com"
+    ];
+    // ======================================================
+
+    const whoamiEl = document.getElementById("whoami");
+    const msgCadastroEl = document.getElementById("msgCadastro");
+    const msgUsuariosEl = document.getElementById("msgUsuarios");
+    const newEmailEl = document.getElementById("newEmail");
+    const newPasswordEl = document.getElementById("newPassword");
+    const usersListEl = document.getElementById("usersList");
+    const emptyUsersEl = document.getElementById("emptyUsers");
+    const sectionCadastro = document.getElementById("sectionCadastro");
+    const sectionUsuarios = document.getElementById("sectionUsuarios");
+    const tabCadastro = document.getElementById("tabCadastro");
+    const tabUsuarios = document.getElementById("tabUsuarios");
+
+    const showMsgCadastro = (t, k="info") => {
+      msgCadastroEl.className = "small " + (k==="ok" ? "msgOk" : k==="error" ? "msgErr" : "msgInfo");
+      msgCadastroEl.textContent = t;
+    };
+
+    const showMsgUsuarios = (t, k="info") => {
+      msgUsuariosEl.className = "small " + (k==="ok" ? "msgOk" : k==="error" ? "msgErr" : "msgInfo");
+      msgUsuariosEl.textContent = t;
+    };
+
+    // IMPORTANTE:
+    // Se você usar createUserWithEmailAndPassword no mesmo auth,
+    // você será DESLOGADO e logado como o usuário novo.
+    // Para evitar isso, usamos um "auth secundário" apontando para o mesmo app:
+    const secondaryAuth = getAuth(app);
+
+    let currentUser = null;
+    let unsubscribeUsers = null;
+
+    // Troca de abas
+    tabCadastro.addEventListener("click", () => {
+      sectionCadastro.style.display = "block";
+      sectionUsuarios.style.display = "none";
+      tabCadastro.classList.add("active");
+      tabUsuarios.classList.remove("active");
+    });
+
+    tabUsuarios.addEventListener("click", () => {
+      sectionCadastro.style.display = "none";
+      sectionUsuarios.style.display = "block";
+      tabCadastro.classList.remove("active");
+      tabUsuarios.classList.add("active");
+      startRealtimeUsers();
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = "./login.html";
+        return;
+      }
+      currentUser = user;
+
+      whoamiEl.textContent = `Logado como: ${user.email || user.uid}`;
+
+      const email = (user.email || "").toLowerCase();
+      const isAdmin = ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email);
+
+      if (!isAdmin) {
+        showMsgCadastro("Acesso negado: você não é admin.", "error");
+        // redireciona pro menu (ou login)
+        setTimeout(() => window.location.href = "./menu.html", 1200);
+      } else {
+        showMsgCadastro("");
+      }
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", async () => {
+      if (unsubscribeUsers) unsubscribeUsers();
+      await signOut(auth);
+      window.location.href = "./login.html";
+    });
+
+    document.getElementById("btnCreate").addEventListener("click", async () => {
+      showMsgCadastro("");
+
+      const email = newEmailEl.value.trim();
+      const password = newPasswordEl.value;
+
+      if (!currentUser) { showMsgCadastro("Sessão não carregada.", "error"); return; }
+      const isAdmin = ADMIN_EMAILS.map(e => e.toLowerCase()).includes((currentUser.email || "").toLowerCase());
+      if (!isAdmin) { showMsgCadastro("Acesso negado: você não é admin.", "error"); return; }
+
+      if (!email) { showMsgCadastro("Informe o e-mail do novo usuário.", "error"); return; }
+      if (!password || password.length < 6) { showMsgCadastro("Senha deve ter pelo menos 6 caracteres.", "error"); return; }
+
+      try {
+        // Cria usuário pelo auth secundário
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        const uid = userCredential.user.uid;
+
+        // Adiciona à coleção de usuários ativos
+        await setDoc(doc(db, "active_users", uid), {
+          uid: uid,
+          email: email,
+          createdAt: serverTimestamp(),
+          createdBy: currentUser.uid
+        });
+
+        showMsgCadastro("Usuário criado e adicionado à lista de ativos.", "ok");
+        newEmailEl.value = "";
+        newPasswordEl.value = "";
+      } catch (e) {
+        showMsgCadastro(e?.message || String(e), "error");
+      }
+    });
+
+    document.getElementById("btnSendReset").addEventListener("click", async () => {
+      showMsgCadastro("");
+
+      const email = newEmailEl.value.trim();
+      if (!email) { showMsgCadastro("Informe o e-mail para enviar redefinição.", "error"); return; }
+
+      try {
+        await sendPasswordResetEmail(auth, email);
+        showMsgCadastro("E-mail de redefinição enviado.", "ok");
+      } catch (e) {
+        showMsgCadastro(e?.message || String(e), "error");
+      }
+    });
+
+    function startRealtimeUsers() {
+      if (unsubscribeUsers) unsubscribeUsers();
+
+      showMsgUsuarios("Carregando usuários...");
+
+      const usersRef = collection(db, "active_users");
+
+      unsubscribeUsers = onSnapshot(usersRef, (snap) => {
+        const users = [];
+        snap.forEach((d) => users.push({ id: d.id, ...d.data() }));
+
+        usersListEl.innerHTML = "";
+        if (users.length === 0) {
+          emptyUsersEl.style.display = "block";
+          showMsgUsuarios("");
+          return;
+        }
+
+        emptyUsersEl.style.display = "none";
+
+        for (const user of users) {
+          const userCard = document.createElement("div");
+          userCard.className = "userCard";
+          userCard.innerHTML = `
+            <div class="userInfo">
+              <div class="userEmail">${escapeHTML(user.email)}</div>
+              <div class="userUid">UID: ${escapeHTML(user.uid)}</div>
+            </div>
+            <button class="btn btnOutline btnRemove" data-uid="${user.uid}">Remover</button>
+          `;
+          usersListEl.appendChild(userCard);
+        }
+
+        // Adiciona event listeners aos botões de remover
+        document.querySelectorAll(".btnRemove").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            const uid = e.target.dataset.uid;
+            removeUser(uid);
+          });
+        });
+
+        showMsgUsuarios("");
+      }, (err) => {
+        console.error("Erro no onSnapshot:", err);
+        showMsgUsuarios("Erro ao carregar usuários: " + (err?.message || String(err)), "error");
+      });
+    }
+
+    async function removeUser(uid) {
+      if (!confirm("Tem certeza que deseja remover este usuário?")) return;
+
+      showMsgUsuarios("Removendo usuário...");
+
+      try {
+        // Remove da coleção de usuários ativos
+        await deleteDoc(doc(db, "active_users", uid));
+        showMsgUsuarios("Usuário removido da lista de ativos.", "ok");
+      } catch (e) {
+        showMsgUsuarios(e?.message || String(e), "error");
+      }
+    }
+
+    function escapeHTML(str) {
+      const div = document.createElement("div");
+      div.appendChild(document.createTextNode(String(str ?? "")));
+      return div.innerHTML;
+    }
+  </script>
+
+  <style>
+    .subbar .tab {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .subbar .tab.active {
+      color: var(--red);
+      font-weight: bold;
+    }
+    .usersList {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .userCard {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: var(--dark-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .userInfo {
+      flex: 1;
+    }
+    .userEmail {
+      font-weight: bold;
+      color: var(--text);
+    }
+    .userUid {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .btnRemove {
+      padding: 6px 12px;
+      font-size: 0.9rem;
+    }
+  </style>
+</body>
+</html>

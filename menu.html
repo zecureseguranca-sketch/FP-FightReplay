@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FP-FightReplay - Início</title>
+
+  <meta name="theme-color" content="#d10000" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192x192.png" />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div class="app">
+    <div id="mainMenu">
+      <div class="topbar">
+        <button id="btnHamburger" class="btn btnOutline" style="padding:8px 10px;">☰</button>
+        <div class="brand"><span class="accent">FP</span>-FightReplay</div>
+        <button id="btnLogout" class="btn btnOutline" style="padding:8px 10px;">Sair</button>
+      </div>
+
+      <div class="subbar">
+        <div class="tab">INÍCIO</div>
+        <div class="tab">NOTIFICAÇÕES <span id="notiBadge" class="badge">0</span></div>
+      </div>
+
+      <div class="banner">
+        <div class="logo">
+          <img src="./logo.png" alt="Logo FP-FightReplay" style="max-width:60px; height:auto;" />
+        </div>
+        <div>
+          <p class="bannerTitle">FP-FightReplay</p>
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="grid3">
+          <a id="tileAcionador" class="tile" href="./acionador.html">
+            <div class="iconBox">
+              <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 12-14h-7l-1-6z"/></svg>
+            </div>
+            <div class="tileLabel">Acionador<br/>de lances</div>
+          </a>
+
+          <a id="tileLances" class="tile" href="./lances.html">
+            <div class="iconBox">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <div class="tileLabel">Baixar<br/>vídeos</div>
+          </a>
+
+          <!-- ✅ Admin: vai aparecer somente para autorizados (JS controla) -->
+          <a id="tileAdminUsers" class="tile" href="./admin-usuarios.html" style="display:none;">
+            <div class="iconBox">
+              <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            </div>
+            <div class="tileLabel">Admin<br/>Usuários</div>
+          </a>
+
+          <a id="tileLavanderia" class="tile" href="./lavanderia.html" style="opacity:.65;">
+            <div class="iconBox">
+              <svg viewBox="0 0 24 24">
+                <!-- ✅ SVG CORRIGIDO (sem erro de número no path) -->
+                <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58c.2-.16.25-.44.12-.64l-1.92-3.32c-.12-.22-.39-.31-.6-.22l-2.39.96c-.5-.4-1.05-.71-1.63-.94l-.36-2.54c-.04-.24-.25-.42-.49-.42h-3.8c-.24 0-.45.18-.49.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96c-.22-.09-.47 0-.6.22L1.71 7.48c-.13.22-.07.5.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.56c-.2.16-.25.44-.12.64l1.92 3.32c.12.22.39.31.6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32c.13-.22.07-.5-.12-.64l-2.03-1.56zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5S10.07 8.5 12 8.5s3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+              </svg>
+            </div>
+            <div class="tileLabel">Lavanderia<br/><span class="muted" style="font-weight:700; font-size:.78rem;">(em dev)</span></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+  <script type="module">
+    import { applyPwaModeClass } from "./pwa.js";
+    import { auth, db } from "./firebase.js";
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { collection, query, where, getCountFromServer, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    applyPwaModeClass();
+
+    const notiBadge = document.getElementById("notiBadge");
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) { window.location.href = "./login.html"; return; }
+
+      // ✅ CONTROLE DE PERMISSÕES: oculta tiles baseado em active_users/{uid}.permissions (SÓ FIRESTORE)
+      try {
+        const uDoc = await getDoc(doc(db, "active_users", user.uid));
+        const perms = uDoc.exists() ? (uDoc.data().permissions || {}) : {};
+
+        const tileAcionador = document.getElementById("tileAcionador");
+        const tileLances = document.getElementById("tileLances");
+        const tileAdmin = document.getElementById("tileAdminUsers");
+        const tileLavanderia = document.getElementById("tileLavanderia");
+
+        const allowedAcionador = perms.menu_acionador !== false;
+        const allowedLances = perms.menu_lances !== false;
+        const allowedLavanderia = perms.menu_lavanderia !== false;
+
+        // ✅ Admin: só aparece se for true explicitamente (sem e-mail hardcoded)
+        const allowedAdmin = perms.menu_admin_users === true;
+
+        tileAcionador.style.display = allowedAcionador ? "" : "none";
+        tileLances.style.display = allowedLances ? "" : "none";
+        tileLavanderia.style.display = allowedLavanderia ? "" : "none";
+        tileAdmin.style.display = allowedAdmin ? "" : "none";
+      } catch (e) {
+        console.error("Erro ao carregar permissões:", e);
+        // fallback: mostra tudo exceto admin (por segurança)
+        document.getElementById("tileAdminUsers").style.display = "none";
+      }
+
+      try {
+        const q = query(
+          collection(db, "notifications"),
+          where("uid", "==", user.uid),
+          where("unread", "==", true)
+        );
+        const c = await getCountFromServer(q);
+        notiBadge.textContent = String(c.data().count || 0);
+      } catch (_) {
+        notiBadge.textContent = "0";
+      }
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", async () => {
+      await signOut(auth);
+      window.location.href = "./login.html";
+    });
+  </script>
+</body>
+</html>

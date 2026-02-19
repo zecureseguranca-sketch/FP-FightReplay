@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>FP-FightReplay - Acionador</title>
+
+  <meta name="theme-color" content="#d10000" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon-192x192.png" />
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <a href="menu.html"><button class="btn btnOutline" style="padding:8px 10px;">←</button></a>
+      <div class="brand">Acionador</div>
+      <button id="btnLogout" class="btn btnOutline" style="padding:8px 10px;">Sair</button>
+    </div>
+
+    <div class="subbar">
+      <div class="tab">CÂMERAS</div>
+      <div class="tab"><span id="camCount">0</span></div>
+    </div>
+
+    <div class="container">
+      <div class="card">
+        <div class="cardH">
+          <div class="brand" style="font-size:1rem;">Selecione uma câmera</div>
+          <div class="divider"></div>
+
+          <p class="muted small" style="margin:10px 0 0;">
+            Selecione o card desejado para salvar o lance referente aos 60 segundos anteriores.<strong></strong> <strong></strong>.
+          </p>
+
+          <div id="msg" class="small msgInfo" style="margin-top:10px;"></div>
+        </div>
+
+        <div class="cardB">
+          <div id="cams" class="cameraGrid"></div>
+          <div id="empty" class="muted small" style="display:none; margin-top:12px;">
+            Nenhuma câmera cadastrada na coleção <strong></strong>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+
+  <script type="module">
+    import { applyPwaModeClass } from "./pwa.js";
+    import { auth, db } from "./firebase.js";
+    import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import {
+      collection,
+      query,
+      where,
+      orderBy,
+      onSnapshot,
+      addDoc,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    applyPwaModeClass();
+
+    const camsEl = document.getElementById("cams");
+    const emptyEl = document.getElementById("empty");
+    const msgEl = document.getElementById("msg");
+    const camCountEl = document.getElementById("camCount");
+
+    let currentUser = null;
+    let unsubscribeCameras = null;
+
+    // >>> CONFIGURAÇÃO: ajuste esses valores conforme seu config.json
+    const ORG_ID = "FP";
+    const SITE_ID = "GB-01";
+
+    const showMsg = (t, k="info") => {
+      msgEl.className = "small " + (k==="ok" ? "msgOk" : k==="error" ? "msgErr" : "msgInfo");
+      msgEl.textContent = t;
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        window.location.href = "login.html";
+        return;
+      }
+      currentUser = user;
+      startRealtimeCameras();
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", async () => {
+      if (unsubscribeCameras) unsubscribeCameras();
+      await signOut(auth);
+      window.location.href = "login.html";
+    });
+
+    function escapeHTML(str) {
+      const div = document.createElement("div");
+      div.appendChild(document.createTextNode(String(str ?? "")));
+      return div.innerHTML;
+    }
+
+    function renderCameraCard({ cameraId, name }) {
+      const card = document.createElement("div");
+      card.className = "camCard";
+      card.innerHTML = `
+        <div>
+          <div class="camName">${escapeHTML(name)}</div>
+          <div class="camId">${escapeHTML(cameraId)}</div>
+        </div>
+        <div style="opacity:.9;">
+          <svg width="22" height="22" viewBox="0 0 24 24" style="fill:var(--red);">
+            <path d="M10 17l5-5-5-5v10z"/>
+          </svg>
+        </div>
+      `;
+
+      card.addEventListener("click", () => createRequest({ cameraId, cameraName: name }));
+      return card;
+    }
+
+    function setEmptyState(count) {
+      camCountEl.textContent = String(count);
+      emptyEl.style.display = count ? "none" : "block";
+    }
+
+    function startRealtimeCameras() {
+      if (unsubscribeCameras) unsubscribeCameras();
+      showMsg("Sincronizando câmeras...");
+
+      // >>> CORREÇÃO: ler de orgs/{org_id}/sites/{site_id}/cameras
+      const camsRef = collection(db, "orgs", ORG_ID, "sites", SITE_ID, "cameras");
+      
+      // Query otimizada (requer índice no Firestore)
+      const q = query(camsRef, where("enabled", "==", true), orderBy("lastSeenAt", "desc"));
+
+      unsubscribeCameras = onSnapshot(q, (snap) => {
+        const cams = [];
+        snap.forEach((d) => cams.push({ docId: d.id, ...d.data() }));
+
+        camsEl.innerHTML = "";
+        for (const cam of cams) {
+          const cameraId = cam.docId;  // ID do documento (ex.: "lpr")
+          const name = cam.name || "Câmera";  // Nome da câmera (ex.: "LPR")
+          camsEl.appendChild(renderCameraCard({ cameraId, name }));
+        }
+
+        setEmptyState(cams.length);
+        showMsg("");
+
+      }, async (err) => {
+        // Fallback: query simples se índice faltar
+        console.warn("Índice faltando, usando query de fallback:", err.message);
+
+        try {
+          const q2 = query(camsRef);
+          unsubscribeCameras = onSnapshot(q2, (snap2) => {
+            const cams2 = [];
+            snap2.forEach((d) => cams2.push({ docId: d.id, ...d.data() }));
+            
+            cams2.sort((a,b) => (a.lastSeenAt?.toMillis?.() ?? 0) - (b.lastSeenAt?.toMillis?.() ?? 0));
+
+            camsEl.innerHTML = "";
+            for (const cam of cams2) {
+              if (cam.enabled === false) continue;
+              const cameraId = cam.docId;
+              const name = cam.name || "Câmera";
+              camsEl.appendChild(renderCameraCard({ cameraId, name }));
+            }
+
+            setEmptyState(camsEl.children.length);
+            showMsg("Índice composto faltando. Crie-o para melhor performance.", "info");
+          });
+        } catch (e) {
+          showMsg(e?.message || String(e), "error");
+        }
+      });
+    }
+
+    async function createRequest({ cameraId, cameraName }) {
+      if (!currentUser) { showMsg("Sessão não carregada.", "error"); return; }
+      if (camsEl.dataset.busy === "1") return;
+      camsEl.dataset.busy = "1";
+      showMsg(`Enviando requisição: ${cameraName}...`);
+
+      try {
+        // >>> CORREÇÃO: enviar para orgs/{org_id}/sites/{site_id}/camera_commands/{camera_id}/queue
+        const commandsRef = collection(db, "orgs", ORG_ID, "sites", SITE_ID, "camera_commands", cameraId, "queue");
+        
+        await addDoc(commandsRef, {
+          type: "start_clip",
+          status: "queued",
+          requestedAt: serverTimestamp(),
+          params: { seconds: 60 },  // Lance de 60 segundos
+          requestedBy: { uid: currentUser.uid, email: currentUser.email || null }
+        });
+        
+        showMsg("Requisição enviada (queued).", "ok");
+      } catch (e) {
+        showMsg(e?.message || String(e), "error");
+      } finally {
+        setTimeout(() => { camsEl.dataset.busy = "0"; }, 600);
+      }
+    }
+  </script>
+</body>
+
+</html>
+
+
+

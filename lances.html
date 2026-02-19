@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>FP-FightReplay - Visualizador de Lances</title>
+
+  <meta name="theme-color" content="#d10000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="FP-FightReplay" />
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192x192.png" />
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="./app.css" />
+
+  <style>
+    body {
+      background: var(--bg, #0b0b0b);
+      color: var(--text, #ffffff);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .muted { color: var(--muted, rgba(255,255,255,.7)); }
+
+    .navbar-dark.bg-dark-custom {
+      background: rgba(15,15,15,.92) !important;
+      border-bottom: 1px solid var(--border, rgba(255,255,255,.12));
+      backdrop-filter: blur(8px);
+    }
+
+    .navbar-brand .text-primary-custom {
+      color: var(--accent, var(--primary, #d10000)) !important;
+      font-weight: 900;
+      letter-spacing: .6px;
+      text-transform: uppercase;
+    }
+
+    .card.bg-dark-card {
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border, rgba(255,255,255,.12));
+      border-radius: 16px;
+    }
+
+    .card-header.bg-primary-custom {
+      background-color: rgba(255,255,255,.04) !important;
+      border-bottom: 1px solid var(--border, rgba(255,255,255,.12));
+    }
+
+    .form-control.bg-dark-input,
+    .form-select.bg-dark-input {
+      background-color: rgba(255,255,255,.04) !important;
+      color: var(--text, #fff) !important;
+      border-color: var(--border, rgba(255,255,255,.12)) !important;
+      border-radius: 14px;
+    }
+    .form-control.bg-dark-input:focus,
+    .form-select.bg-dark-input:focus {
+      background-color: rgba(255,255,255,.06) !important;
+      color: var(--text, #fff) !important;
+      border-color: var(--accent, var(--primary, #d10000)) !important;
+      box-shadow: 0 0 0 .25rem rgba(209,0,0,.18);
+    }
+
+    .btn-primary-custom {
+      background: var(--accent, var(--primary, #d10000));
+      border-color: var(--accent, var(--primary, #d10000));
+      color: #fff;
+      border-radius: 14px;
+      font-weight: 900;
+      letter-spacing: .4px;
+      transition: filter .15s ease, transform .05s ease;
+    }
+    .btn-primary-custom:hover { filter: brightness(.92); color:#fff; }
+    .btn-primary-custom:active { transform: scale(.99); }
+
+    .btn-outline-secondary-custom {
+      color: var(--text, #fff);
+      border-color: var(--border, rgba(255,255,255,.18));
+      border-radius: 14px;
+      font-weight: 800;
+      transition: background-color .2s ease, border-color .2s ease, color .2s ease;
+    }
+    .btn-outline-secondary-custom:hover {
+      background-color: rgba(255,255,255,.06);
+      border-color: rgba(255,255,255,.28);
+      color: var(--text, #fff);
+    }
+
+    .badge-status {
+      font-weight: 800;
+      border-radius: 999px;
+      padding: .35rem .55rem;
+      font-size: 0.75em;
+    }
+    .badge-success {
+      background: rgba(76, 175, 80, .14);
+      color: rgba(76, 175, 80, 1);
+      border: 1px solid rgba(76, 175, 80, .35);
+    }
+    .badge-danger {
+      background: rgba(244, 67, 54, .14);
+      color: rgba(244, 67, 54, 1);
+      border: 1px solid rgba(244, 67, 54, .35);
+    }
+    .badge-info {
+      background: rgba(255,255,255,.06);
+      color: var(--accent, var(--primary, #d10000));
+      border: 1px solid rgba(209,0,0,.35);
+    }
+
+    .video-player-container {
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      padding-bottom: 56.25%;
+      height: 0;
+      border: 1px solid var(--border, rgba(255,255,255,.12));
+    }
+    .video-player-container video {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: contain;
+    }
+
+    .empty-state {
+      background: rgba(255,255,255,.03);
+      border: 1px dashed rgba(255,255,255,.18);
+      border-radius: 16px;
+      padding: 18px;
+      color: var(--muted, rgba(255,255,255,.7));
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 1080; }
+    .btn-close-white { filter: invert(1) grayscale(100%) brightness(200%); }
+
+    @media (max-width: 767.98px) {
+      #filtersSidebar {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: 82%;
+        height: 100%;
+        background-color: var(--bg, #0b0b0b);
+        z-index: 1050;
+        transition: left 0.3s ease-in-out;
+        box-shadow: 0 0 18px rgba(0,0,0,0.6);
+        padding-top: 60px;
+        overflow-y: auto;
+      }
+      #filtersSidebar.show { left: 0; }
+      #filtersOverlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: rgba(0,0,0,0.55);
+        z-index: 1040;
+        display: none;
+      }
+      #filtersOverlay.show { display: block; }
+      .navbar-toggler { display: block; }
+    }
+    @media (min-width: 768px) {
+      .navbar-toggler { display: none; }
+      #filtersSidebar {
+        position: static;
+        width: auto;
+        height: auto;
+        box-shadow: none;
+        padding-top: 0;
+        overflow-y: visible;
+      }
+    }
+
+    .btn-download { display: inline-flex; align-items: center; gap: 8px; }
+    .btn-download svg { width: 16px; height: 16px; fill: currentColor; }
+
+    .card-header.bg-primary-custom h5,
+    .card-header.bg-primary-custom .mb-0 { color: var(--text, #ffffff) !important; }
+
+    .form-label { color: var(--text, #ffffff) !important; font-weight: 700; }
+
+    #lancesContainer .card-title { color: var(--accent, #d10000) !important; font-weight: 900; }
+
+    .card-text.muted small { color: var(--muted, #bdbdbd) !important; }
+
+    .form-select.bg-dark-input option {
+      color: var(--text, #ffffff) !important;
+      background-color: var(--bg, #0b0b0b) !important;
+    }
+
+    .form-control.bg-dark-input::placeholder { color: var(--muted, #bdbdbd) !important; opacity: 0.8; }
+
+    .small.muted { color: var(--muted, #bdbdbd) !important; }
+  </style>
+</head>
+
+<body>
+  <nav class="navbar navbar-dark bg-dark-custom sticky-top">
+    <div class="container-fluid">
+      <div class="d-flex gap-2">
+        <a href="./menu.html"><button class="btn btn-outline-secondary-custom btn-sm" style="padding:8px 10px;">←</button></a>
+        <button class="navbar-toggler d-md-none me-2" type="button" aria-controls="filtersSidebar" aria-expanded="false" aria-label="Abrir filtros">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      </div>
+
+      <a class="navbar-brand mb-0 h1" href="./menu.html" style="text-decoration:none;">
+        <span class="text-primary-custom">FP</span> - Lances
+      </a>
+
+      <div class="d-flex gap-2">
+        <button id="btnReload" class="btn btn-primary-custom btn-sm" aria-label="Recarregar lances">Recarregar</button>
+        <button id="btnLogout" class="btn btn-outline-secondary-custom btn-sm" aria-label="Sair">Sair</button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-4 flex-grow-1">
+    <div class="row">
+      <div id="filtersOverlay" class="d-md-none"></div>
+
+      <div class="col-md-3" id="filtersSidebar" role="complementary" aria-label="Filtros de Lances">
+        <div class="card bg-dark-card h-100">
+          <div class="card-header bg-primary-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Filtros</h5>
+            <button type="button" class="btn-close btn-close-white d-md-none" aria-label="Fechar filtros"></button>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label for="cameraFilter" class="form-label">Câmera</label>
+              <select id="cameraFilter" class="form-select bg-dark-input" aria-label="Filtrar por câmera">
+                <option value="">Todas</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label for="dateFilter" class="form-label">Data de Postagem</label>
+              <input type="date" id="dateFilter" class="form-control bg-dark-input" aria-label="Filtrar por data de postagem">
+            </div>
+
+            <button id="btnApplyFilters" class="btn btn-primary-custom w-100" aria-label="Aplicar filtros">Aplicar Filtros</button>
+
+            <div class="mt-3 small muted">
+              Dica: no PWA, os filtros abrem em painel lateral.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main class="col-md-9 main-content" role="main" aria-live="polite" aria-atomic="true">
+        <div id="lancesContainer" class="row" role="list"></div>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    import { getStorage, ref as storageRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCyFgjAoGy_-KEcgv3-1JmP1gbKtFuup88",
+      authDomain: "jiu-views.firebaseapp.com",
+      projectId: "jiu-views",
+      storageBucket: "jiu-views.firebasestorage.app",
+      messagingSenderId: "138259652796",
+      appId: "1:138259652796:web:78ba886c99e9502413b0b9",
+      measurementId: "G-1WSG8T2KXW"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) { window.location.href = "./login.html"; return; }
+      loadLances();
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", async () => {
+      await signOut(auth);
+      window.location.href = "./login.html";
+    });
+
+    const containerEl = document.getElementById("lancesContainer");
+    const cameraFilterEl = document.getElementById("cameraFilter");
+    const dateFilterEl = document.getElementById("dateFilter");
+    const btnReload = document.getElementById("btnReload");
+    const btnApplyFilters = document.getElementById("btnApplyFilters");
+
+    const toastContainer = document.querySelector(".toast-container");
+
+    const filtersSidebar = document.getElementById("filtersSidebar");
+    const filtersOverlay = document.getElementById("filtersOverlay");
+    const navbarToggler = document.querySelector(".navbar-toggler");
+    const closeSidebarBtn = filtersSidebar.querySelector(".btn-close");
+
+    let allLances = [];
+    let filteredLances = [];
+
+    function escapeHTML(str) {
+      const div = document.createElement("div");
+      div.appendChild(document.createTextNode(String(str ?? "")));
+      return div.innerHTML;
+    }
+
+    function isValidUrl(s) { try { new URL(s); return true; } catch (_) { return false; } }
+
+    function debounce(fn, delay) {
+      let t;
+      return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
+    }
+
+    function showToast(message, type = "info") {
+      const toastEl = document.createElement("div");
+      toastEl.className = `toast align-items-center text-white border-0`;
+      toastEl.style.background =
+        (type === "danger") ? "#F44336" :
+        (type === "success") ? "#4CAF50" :
+        (type === "warning") ? "#FFC107" :
+        "rgba(20,20,20,.95)";
+
+      toastEl.setAttribute("role", "alert");
+      toastEl.setAttribute("aria-live", "assertive");
+      toastEl.setAttribute("aria-atomic", "true");
+      toastEl.innerHTML = `
+        <div class="d-flex">
+          <div class="toast-body">${escapeHTML(message)}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>
+        </div>
+      `;
+      toastContainer.appendChild(toastEl);
+      const bsToast = new bootstrap.Toast(toastEl, { delay: 2600 });
+      bsToast.show();
+      toastEl.addEventListener("hidden.bs.toast", () => toastEl.remove());
+    }
+
+    function toJsDate(value) {
+      if (!value) return null;
+      if (typeof value === "object" && typeof value.toDate === "function") {
+        const d = value.toDate();
+        return isNaN(d.getTime()) ? null : d;
+      }
+      if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+      if (typeof value === "number") {
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof value === "string") {
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    }
+
+    function getPostedAt(d) {
+      return toJsDate(d.created_at_utc) || toJsDate(d.createdAt) || toJsDate(d.postedAt) || null;
+    }
+
+    function formatPtBrFull(date) {
+      if (!date) return "Data desconhecida";
+      return new Intl.DateTimeFormat("pt-BR", {
+        year: "numeric", month: "long", day: "numeric",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+      }).format(date);
+    }
+
+    function formatISODate(date) {
+      if (!date) return null;
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function getStatusBadge(d) {
+      const url = d.url || "";
+      const hasStoragePath = Boolean(d.storage_path);
+
+      let label = "Desconhecido";
+      let cls = "badge-info";
+
+      if (isValidUrl(url)) { label = "Sucesso"; cls = "badge-success"; }
+      else if (d.status === "failed") { label = "Falha"; cls = "badge-danger"; }
+      else if (hasStoragePath) { label = "Processando/URL negada"; cls = "badge-info"; }
+
+      return `<span class="badge badge-status ${cls}">${escapeHTML(label)}</span>`;
+    }
+
+    function getCameraKey(d) { return d.camera_name || d.camera || d.camera_id || ""; }
+
+    async function buildDownloadUrl(storagePath) {
+      if (!storagePath) return "";
+      try { return await getDownloadURL(storageRef(storage, storagePath)); }
+      catch (_) { return ""; }
+    }
+
+    async function tryQueryLances() {
+      try {
+        const q1 = query(collection(db, "lances"), orderBy("created_at_utc", "desc"), limit(150));
+        return await getDocs(q1);
+      } catch (_) {
+        const q2 = query(collection(db, "lances"), orderBy("createdAt", "desc"), limit(150));
+        return await getDocs(q2);
+      }
+    }
+
+    function showEmptyState() {
+      containerEl.innerHTML = `
+        <div class="col-12">
+          <div class="empty-state" role="status" aria-live="polite">
+            <h5>Nenhum lance encontrado</h5>
+            <p class="muted">Tente ajustar os filtros ou recarregar.</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function showSkeleton(count = 6) {
+      containerEl.innerHTML = "";
+      for (let i = 0; i < count; i++) {
+        const el = document.createElement("div");
+        el.className = "col-md-6 mb-4";
+        el.innerHTML = `
+          <div class="card bg-dark-card" style="opacity:.6;">
+            <div class="card-body">
+              <div style="height:14px;background:rgba(255,255,255,.08);border-radius:6px;width:70%;margin-bottom:10px;"></div>
+              <div style="height:12px;background:rgba(255,255,255,.06);border-radius:6px;width:50%;margin-bottom:12px;"></div>
+              <div style="height:170px;background:rgba(255,255,255,.06);border-radius:14px;margin-bottom:12px;"></div>
+            </div>
+          </div>
+        `;
+        containerEl.appendChild(el);
+      }
+    }
+
+    function guessFileName(d) {
+      const cam = String(getCameraKey(d) || "camera").replace(/[^\w\-]+/g, "_");
+      const dt = getPostedAt(d);
+      const iso = dt ? dt.toISOString().replace(/[:.]/g, "-") : "sem-data";
+      return `lance_${cam}_${iso}.mp4`;
+    }
+
+    // ✅ iOS PWA: salvar vídeo via share sheet com ARQUIVO (não URL)
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    }
+    function isStandalone() {
+      const iosStandalone = (window.navigator.standalone === true);
+      const displayModeStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+      return iosStandalone || displayModeStandalone;
+    }
+    function looksLikeCorsError(err) {
+      const msg = String(err?.message || err || "").toLowerCase();
+      return msg.includes("failed to fetch") || msg.includes("load failed") || msg.includes("networkerror");
+    }
+    async function fetchAsFile(url, filename) {
+      const resp = await fetch(url, { method: "GET", mode: "cors", cache: "no-store" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} ao baixar o vídeo`);
+      const blob = await resp.blob();
+      const safeName = (filename && filename.endsWith(".mp4")) ? filename : `${filename || "lance"}.mp4`;
+      return new File([blob], safeName, { type: blob.type || "video/mp4" });
+    }
+
+    async function smartDownload(url, filename, title) {
+      if (!isValidUrl(url)) {
+        showToast("Sem URL válida para download.", "warning");
+        return;
+      }
+
+      const iosPwa = isIOS() && isStandalone();
+
+      if (iosPwa) {
+        try {
+          showToast("Preparando arquivo para salvar…", "info");
+
+          const file = await fetchAsFile(url, filename);
+
+          if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+            await navigator.share({
+              files: [file],
+              title: title || "Vídeo"
+            });
+            showToast("No iOS: escolha “Salvar Vídeo” ou “Salvar em Arquivos”.", "success");
+            return;
+          }
+
+          showToast("Seu iOS não suporta salvar por arquivo no PWA. Atualize o iOS.", "warning");
+          return;
+
+        } catch (e) {
+          console.error("iOS download error:", e);
+
+          if (looksLikeCorsError(e)) {
+            showToast("Bloqueado por CORS no iOS. Precisa liberar CORS no Firebase Storage.", "danger");
+            return;
+          }
+
+          showToast(`Falha ao preparar o vídeo: ${e?.message || e}`, "danger");
+          return;
+        }
+      }
+
+      // Android / Notebook: download padrão
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename || "lance.mp4";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast("Download iniciado.", "success");
+      } catch (e) {
+        console.error("Download error:", e);
+        window.open(url, "_blank", "noopener,noreferrer");
+        showToast("Abrindo o vídeo no navegador para baixar.", "warning");
+      }
+    }
+
+    function createLanceCard(d) {
+      const card = document.createElement("div");
+      card.className = "col-md-6 mb-4";
+
+      const cameraName = escapeHTML(getCameraKey(d) || "Câmera Desconhecida");
+      const url = d.url || "";
+      const postedAt = getPostedAt(d);
+      const postedFmt = formatPtBrFull(postedAt);
+
+      const disabled = isValidUrl(url) ? "" : "disabled";
+      const safeUrl = escapeHTML(url);
+      const fileName = escapeHTML(guessFileName(d));
+
+      card.innerHTML = `
+        <div class="card bg-dark-card">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+              <h5 class="card-title truncate" title="${cameraName}">${cameraName}</h5>
+              ${getStatusBadge(d)}
+            </div>
+
+            <p class="card-text muted mb-2">
+              <small><strong>Postado em:</strong> ${escapeHTML(postedFmt)}</small>
+            </p>
+
+            <div class="video-player-container mb-3">
+              <video controls preload="metadata" playsinline webkit-playsinline>
+                <source src="${safeUrl}" type="video/mp4">
+                Seu navegador não suporta o elemento de vídeo.
+              </video>
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-outline-secondary-custom btn-sm btn-download"
+                      data-action="download"
+                      data-url="${safeUrl}"
+                      data-filename="${fileName}"
+                      data-title="${cameraName}"
+                      ${disabled}
+                      aria-label="Salvar vídeo no celular">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zm7-18v10.17l3.59-3.58L17 10l-5 5-5-5 1.41-1.41L11 12.17V2h1z"/></svg>
+                Salvar no celular
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      return card;
+    }
+
+    async function loadLances() {
+      showSkeleton();
+
+      try {
+        const snap = await tryQueryLances();
+        const raw = [];
+        snap.forEach(docu => raw.push({ id: docu.id, ...docu.data() }));
+
+        allLances = await Promise.all(raw.map(async (d) => {
+          const url = (d.url && isValidUrl(d.url)) ? d.url : await buildDownloadUrl(d.storage_path);
+          return { ...d, url };
+        }));
+
+        const cameras = [...new Set(allLances.map(getCameraKey).filter(Boolean))].sort((a, b) =>
+          String(a).localeCompare(String(b), "pt-BR")
+        );
+
+        cameraFilterEl.innerHTML = '<option value="">Todas</option>';
+        for (const cam of cameras) {
+          const opt = document.createElement("option");
+          opt.value = cam;
+          opt.textContent = cam;
+          cameraFilterEl.appendChild(opt);
+        }
+
+        applyFilters();
+      } catch (error) {
+        console.error("Erro ao carregar lances:", error);
+        containerEl.innerHTML = `
+          <div class="col-12">
+            <div class="empty-state" role="alert">
+              <h5>Erro ao carregar lances</h5>
+              <p class="muted">Verifique regras/índices do Firestore e permissões do Storage.</p>
+              <p class="muted"><small>Detalhes: ${escapeHTML(error?.message || String(error))}</small></p>
+            </div>
+          </div>
+        `;
+        showToast("Erro ao carregar lances. Veja o console (F12).", "danger");
+      }
+    }
+
+    function applyFilters() {
+      const camSelected = cameraFilterEl.value;
+      const dateSelected = dateFilterEl.value;
+
+      filteredLances = allLances.filter(d => {
+        const camKey = getCameraKey(d);
+        if (camSelected && camKey !== camSelected) return false;
+
+        if (dateSelected) {
+          const postedAt = getPostedAt(d);
+          const iso = formatISODate(postedAt);
+          if (iso !== dateSelected) return false;
+        }
+        return true;
+      });
+
+      renderLances();
+    }
+
+    function renderLances() {
+      containerEl.innerHTML = "";
+      if (!filteredLances.length) { showEmptyState(); return; }
+      for (const d of filteredLances) containerEl.appendChild(createLanceCard(d));
+    }
+
+    containerEl.addEventListener("click", async (e) => {
+      const target = e.target;
+
+      const btnDownload = target.closest("button[data-action='download']");
+      if (btnDownload) {
+        const url = btnDownload.dataset.url || "";
+        const filename = btnDownload.dataset.filename || "lance.mp4";
+        const title = btnDownload.dataset.title || "Vídeo";
+        await smartDownload(url, filename, title);
+        return;
+      }
+    });
+
+    const debouncedApply = debounce(applyFilters, 200);
+    cameraFilterEl.addEventListener("change", debouncedApply);
+    dateFilterEl.addEventListener("change", debouncedApply);
+    btnApplyFilters.addEventListener("click", applyFilters);
+    btnReload.addEventListener("click", loadLances);
+
+    navbarToggler?.addEventListener("click", () => {
+      filtersSidebar.classList.add("show");
+      filtersOverlay.classList.add("show");
+    });
+    closeSidebarBtn?.addEventListener("click", () => {
+      filtersSidebar.classList.remove("show");
+      filtersOverlay.classList.remove("show");
+    });
+    filtersOverlay?.addEventListener("click", () => {
+      filtersSidebar.classList.remove("show");
+      filtersOverlay.classList.remove("show");
+    });
+  </script>
+</body>
+</html>

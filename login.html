@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FP-FightReplay - Login</title>
+
+  <meta name="theme-color" content="#d10000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="FP-FightReplay" />
+
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192x192.png" />
+  <link rel="apple-touch-icon" href="./icon-192x192.png" />
+
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="brand"><span class="accent">FP</span>-FightReplay</div>
+      <div></div>
+    </div>
+
+    <div class="container" style="max-width:520px;">
+      <div class="card">
+        <div class="cardH">
+          <!-- ✅ LOGO ADICIONADO: substitua "./logo.png" pelo caminho real da sua imagem -->
+          <div style="text-align:center; margin-bottom:20px;">
+            <img src="./logo.png" alt="Logo FP-FightReplay" style="max-width:150px; height:auto;" />
+          </div>
+          <div class="brand">Acesso</div>
+          <div class="divider"></div>
+          <p class="muted small">Entre para continuar</p>
+        </div>
+
+        <div class="cardB">
+          <div class="field">
+            <label for="email">E-mail</label>
+            <input id="email" class="input" type="email" autocomplete="username" />
+          </div>
+
+          <div class="field">
+            <label for="password">Senha</label>
+            <input id="password" class="input" type="password" autocomplete="current-password" />
+          </div>
+
+          <div style="display:grid; gap:10px;">
+            <button id="btnLogin" class="btn btnRed">Entrar</button>
+            <button id="btnForgot" class="btn btnOutline">Esqueci a senha</button>
+
+            <button id="btnInstall" class="btn btnOutline" style="display:none;">
+              Instalar app
+            </button>
+          </div>
+
+          <div id="msg" class="small msgInfo" style="margin-top:12px;"></div>
+
+          <div id="installHint" class="installHint small" style="margin-top:10px;">
+            Dica: instale o app pelo menu do navegador ("Adicionar à tela inicial").
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+
+  <script type="module">
+    import { applyPwaModeClass, setupInstallHint, isStandalone } from "./pwa.js";
+    import { auth } from "./firebase.js";
+    import {
+      onAuthStateChanged,
+      signInWithEmailAndPassword,
+      sendPasswordResetEmail
+    } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+    applyPwaModeClass();
+
+    const installHintEl = document.getElementById("installHint");
+    const btnInstall = document.getElementById("btnInstall");
+
+    setupInstallHint(installHintEl);
+
+    if (isStandalone()) {
+      installHintEl.style.display = "none";
+      btnInstall.style.display = "none";
+    }
+
+    const emailEl = document.getElementById("email");
+    const passEl = document.getElementById("password");
+    const msgEl = document.getElementById("msg");
+
+    const showMsg = (t, k = "info") => {
+      msgEl.className = "small " + (k === "ok" ? "msgOk" : k === "error" ? "msgErr" : "msgInfo");
+      msgEl.textContent = t;
+    };
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) window.location.href = "./menu.html";
+    });
+
+    document.getElementById("btnLogin").addEventListener("click", async () => {
+      showMsg("");
+      try {
+        await signInWithEmailAndPassword(auth, emailEl.value.trim(), passEl.value);
+        window.location.href = "./menu.html";
+      } catch (e) {
+        showMsg(e?.message || String(e), "error");
+      }
+    });
+
+    document.getElementById("btnForgot").addEventListener("click", async () => {
+      const email = emailEl.value.trim();
+      if (!email) {
+        showMsg("Informe seu e-mail para redefinir a senha.", "error");
+        return;
+      }
+      try {
+        await sendPasswordResetEmail(auth, email);
+        showMsg("E-mail de redefinição enviado.", "ok");
+      } catch (e) {
+        showMsg(e?.message || String(e), "error");
+      }
+    });
+
+    // ===== Instalação (Chrome/Edge/Android) =====
+    let deferredPrompt = null;
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btnInstall.style.display = "block";
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredPrompt = null;
+      btnInstall.style.display = "none";
+      installHintEl.style.display = "none";
+      showMsg("App instalado com sucesso.", "ok");
+    });
+
+    btnInstall.addEventListener("click", async () => {
+      if (!deferredPrompt) {
+        showMsg("Instalação não disponível agora. Verifique HTTPS + manifest + ícones + SW.", "error");
+        return;
+      }
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      btnInstall.style.display = "none";
+      if (choice?.outcome === "dismissed") showMsg("Instalação cancelada.", "info");
+    });
+  </script>
+</body>
+</html>

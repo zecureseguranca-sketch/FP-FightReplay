@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FP-FightReplay - Admin Usuários</title>
+
+  <meta name="theme-color" content="#d10000" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon-192x192.png" />
+  <link rel="stylesheet" href="./app.css" />
+
+  <style>
+    .tabsRow { display:flex; gap:10px; margin: 12px 0; }
+    .tabBtn { flex:1; padding:10px 12px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--text); font-weight:900; }
+    .tabBtn.active { border-color: rgba(209,0,0,.55); box-shadow: 0 0 0 .25rem rgba(209,0,0,.18); }
+    .userCard { display:flex; gap:12px; justify-content:space-between; align-items:flex-start; padding:12px; border:1px solid var(--border); border-radius:12px; background: rgba(255,255,255,.03); }
+    .userMeta { display:flex; flex-direction:column; gap:4px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; font-size:.78rem; padding:4px 10px; border-radius:999px; border:1px solid rgba(255,255,255,.14); color:var(--muted); }
+    .permGrid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px; }
+    .permItem { display:flex; gap:10px; align-items:center; padding:10px; border-radius:12px; border:1px solid var(--border); background: rgba(255,255,255,.02); }
+    .permItem input { width:18px; height:18px; }
+    .rowActions { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:10px; flex-wrap:wrap; }
+    .small2 { font-size:.85rem; }
+    .dangerBox { border:1px solid rgba(244,67,54,.35); background: rgba(244,67,54,.08); padding:10px; border-radius:12px; }
+    .lockOverlay {
+      border: 1px solid rgba(244,67,54,.35);
+      background: rgba(244,67,54,.08);
+      padding: 14px;
+      border-radius: 12px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <a href="./menu.html"><button class="btn btnOutline" style="padding:8px 10px;">←</button></a>
+      <div class="brand">Admin Usuários</div>
+      <button id="btnLogout" class="btn btnOutline" style="padding:8px 10px;">Sair</button>
+    </div>
+
+    <div class="container" style="max-width:860px;">
+      <div class="card">
+        <div class="cardH">
+          <div class="brand" style="font-size:1rem;">Gestão de usuários e permissões</div>
+          <div class="divider"></div>
+          <div id="whoami" class="muted small" style="margin-top:8px;"></div>
+          <div id="msg" class="small msgInfo" style="margin-top:10px;"></div>
+
+          <div id="lockBox" class="lockOverlay" style="display:none;">
+            <div style="font-weight:900;">Acesso negado</div>
+            <div class="muted small" style="margin-top:6px;">
+              Seu usuário não tem permissão <code>menu_admin_users</code> no Firestore.
+            </div>
+          </div>
+
+          <div class="tabsRow" id="tabs" style="display:none;">
+            <button id="tabCadastro" class="tabBtn active" type="button">CADASTRO</button>
+            <button id="tabUsuarios" class="tabBtn" type="button">USUÁRIOS</button>
+          </div>
+        </div>
+
+        <!-- CADASTRO -->
+        <div id="sectionCadastro" class="cardB" style="display:none;">
+          <div class="field">
+            <label for="newEmail">E-mail do novo usuário</label>
+            <input id="newEmail" class="input" type="email" autocomplete="off" placeholder="usuario@dominio.com" />
+          </div>
+
+          <div class="field">
+            <label for="newPassword">Senha temporária</label>
+            <input id="newPassword" class="input" type="password" autocomplete="off" placeholder="mínimo 6 caracteres" />
+          </div>
+
+          <div class="divider" style="margin:14px 0;"></div>
+
+          <div class="brand" style="font-size:.95rem;">Permissões iniciais</div>
+          <div class="muted small" style="margin-top:6px;">
+            Marque quais menus esse usuário poderá acessar.
+          </div>
+
+          <div id="permDefaults" class="permGrid"></div>
+
+          <div class="rowActions">
+            <button id="btnCreate" class="btn btnRed">Criar usuário</button>
+            <button id="btnSendReset" class="btn btnOutline">Enviar redefinição de senha</button>
+          </div>
+
+          <div class="installHint small" style="display:block; margin-top:12px;">
+            Segurança: o ideal é criar usuários via Cloud Function + Custom Claims (admin).
+          </div>
+        </div>
+
+        <!-- LISTA -->
+        <div id="sectionUsuarios" class="cardB" style="display:none;">
+          <div class="brand" style="font-size:.95rem;">Usuários ativos</div>
+          <div class="muted small" style="margin-top:6px;">
+            Edite permissões e remova acesso.
+          </div>
+
+          <div id="usersList" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
+          <div id="emptyUsers" class="muted small" style="display:none; margin-top:12px;">
+            Nenhum usuário ativo encontrado.
+          </div>
+
+          <div class="divider" style="margin:14px 0;"></div>
+
+          <div class="dangerBox small2">
+            Remover aqui <strong>só tira acesso no seu app</strong> (remove da coleção <code>active_users</code>).
+            <br/>O usuário ainda pode existir no Firebase Auth (conta criada).
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+  import { applyPwaModeClass } from "./pwa.js";
+  import { app, auth, db, firebaseConfig } from "./firebase.js";
+
+  // ✅ initializeApp vem do firebase-app.js (NÃO do firebase-auth.js)
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+
+  import {
+    onAuthStateChanged,
+    signOut,
+    getAuth,
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
+  } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+  import {
+    collection,
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    deleteDoc,
+    onSnapshot,
+    serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+  applyPwaModeClass();
+
+  // ✅ IDs das permissões
+  const MENU_PERMS = [
+    { id: "menu_acionador", label: "Acionador de lances" },
+    { id: "menu_lances", label: "Baixar vídeos" },
+    { id: "menu_lavanderia", label: "Lavanderia" },
+    { id: "menu_admin_users", label: "Admin usuários" }
+  ];
+
+  const whoamiEl = document.getElementById("whoami");
+  const msgEl = document.getElementById("msg");
+  const lockBox = document.getElementById("lockBox");
+  const tabsEl = document.getElementById("tabs");
+
+  const tabCadastro = document.getElementById("tabCadastro");
+  const tabUsuarios = document.getElementById("tabUsuarios");
+  const sectionCadastro = document.getElementById("sectionCadastro");
+  const sectionUsuarios = document.getElementById("sectionUsuarios");
+
+  const newEmailEl = document.getElementById("newEmail");
+  const newPasswordEl = document.getElementById("newPassword");
+  const permDefaultsEl = document.getElementById("permDefaults");
+
+  const usersListEl = document.getElementById("usersList");
+  const emptyUsersEl = document.getElementById("emptyUsers");
+
+  const showMsg = (t, k="info") => {
+    msgEl.className = "small " + (k === "ok" ? "msgOk" : (k === "error" ? "msgErr" : "msgInfo"));
+    msgEl.textContent = t || "";
+  };
+
+  const escapeHTML = (str) => {
+    const div = document.createElement("div");
+    div.appendChild(document.createTextNode(String(str ?? "")));
+    return div.innerHTML;
+  };
+
+  // ✅ CRÍTICO: criar "SECOND APP" para não trocar o login do admin
+  // - você PRECISA exportar firebaseConfig no firebase.js
+  // - (se não exporta, eu te ajusto o firebase.js em 30 segundos)
+  const secondApp = initializeApp(firebaseConfig, "FP_SECONDARY_APP");
+  const secondaryAuth = getAuth(secondApp);
+
+  let currentUser = null;
+  let unsubscribeUsers = null;
+
+  function renderPermDefaults() {
+    permDefaultsEl.innerHTML = "";
+    for (const p of MENU_PERMS) {
+      const item = document.createElement("label");
+      item.className = "permItem";
+      item.innerHTML = `
+        <input type="checkbox" data-perm="${escapeHTML(p.id)}" checked />
+        <div>
+          <div style="font-weight:900;">${escapeHTML(p.label)}</div>
+          <div class="muted small">Permissão: <code>${escapeHTML(p.id)}</code></div>
+        </div>
+      `;
+      permDefaultsEl.appendChild(item);
+    }
+  }
+
+  function getDefaultPermsFromUI() {
+    const perms = {};
+    permDefaultsEl.querySelectorAll("input[type='checkbox'][data-perm]").forEach(cb => {
+      perms[cb.dataset.perm] = cb.checked;
+    });
+    return perms;
+  }
+
+  function setTab(which) {
+    const cadastro = which === "cadastro";
+    tabCadastro.classList.toggle("active", cadastro);
+    tabUsuarios.classList.toggle("active", !cadastro);
+    sectionCadastro.style.display = cadastro ? "block" : "none";
+    sectionUsuarios.style.display = cadastro ? "none" : "block";
+    if (!cadastro) startRealtimeUsers();
+  }
+
+  tabCadastro.addEventListener("click", () => setTab("cadastro"));
+  tabUsuarios.addEventListener("click", () => setTab("usuarios"));
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.href = "./login.html";
+      return;
+    }
+
+    currentUser = user;
+    whoamiEl.textContent = `Logado como: ${user.email || user.uid}`;
+
+    // ✅ Admin = Firestore (active_users/{uid})
+    try {
+      const uDoc = await getDoc(doc(db, "active_users", user.uid));
+      const data = uDoc.exists() ? (uDoc.data() || {}) : null;
+
+      const active = Boolean(data?.active);
+      const perms = (data?.permissions && typeof data.permissions === "object") ? data.permissions : {};
+      const isAdmin = active && (perms.menu_admin_users === true);
+
+      if (!isAdmin) {
+        lockBox.style.display = "block";
+        tabsEl.style.display = "none";
+        sectionCadastro.style.display = "none";
+        sectionUsuarios.style.display = "none";
+        showMsg("Acesso negado: permissões insuficientes.", "error");
+        return;
+      }
+
+      lockBox.style.display = "none";
+      tabsEl.style.display = "flex";
+      renderPermDefaults();
+      setTab("cadastro");
+      showMsg("");
+    } catch (e) {
+      console.error("ADMIN CHECK ERROR:", e);
+      showMsg("Erro ao validar admin no Firestore: " + (e?.message || String(e)), "error");
+    }
+  });
+
+  document.getElementById("btnLogout").addEventListener("click", async () => {
+    if (unsubscribeUsers) unsubscribeUsers();
+    await signOut(auth);
+    window.location.href = "./login.html";
+  });
+
+  document.getElementById("btnCreate").addEventListener("click", async () => {
+    showMsg("");
+
+    const email = newEmailEl.value.trim();
+    const password = newPasswordEl.value;
+
+    if (!currentUser) { showMsg("Sessão não carregada.", "error"); return; }
+    if (!email) { showMsg("Informe o e-mail do novo usuário.", "error"); return; }
+    if (!password || password.length < 6) { showMsg("Senha deve ter pelo menos 6 caracteres.", "error"); return; }
+
+    const permissions = getDefaultPermsFromUI();
+
+    try {
+      // 1) cria no Auth secundário (não mexe no login do admin)
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const uid = userCredential.user.uid;
+
+      // 2) desloga o secundário (boa prática)
+      await signOut(secondaryAuth);
+
+      // 3) cria no Firestore (active_users)
+      await setDoc(doc(db, "active_users", uid), {
+        uid,
+        email,
+        active: true,
+        permissions,
+        createdAt: serverTimestamp(),
+        createdBy: { uid: currentUser.uid, email: currentUser.email || null }
+      }, { merge: true });
+
+      // ✅ importante: não redireciona, não recarrega, não mexe no auth principal
+      showMsg("Usuário criado com sucesso e salvo em active_users.", "ok");
+      newEmailEl.value = "";
+      newPasswordEl.value = "";
+    } catch (e) {
+      console.error("CREATE USER ERROR:", e);
+      // aqui você vai ver se é permission-denied do Firestore ou erro do Auth
+      showMsg(`Erro ao criar usuário: ${e?.code || ""} ${e?.message || e}`, "error");
+    }
+  });
+
+  document.getElementById("btnSendReset").addEventListener("click", async () => {
+    showMsg("");
+    const email = newEmailEl.value.trim();
+    if (!email) { showMsg("Informe o e-mail para enviar redefinição.", "error"); return; }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      showMsg("E-mail de redefinição enviado.", "ok");
+    } catch (e) {
+      showMsg(e?.message || String(e), "error");
+    }
+  });
+
+  function startRealtimeUsers() {
+    if (unsubscribeUsers) unsubscribeUsers();
+
+    const usersRef = collection(db, "active_users");
+    unsubscribeUsers = onSnapshot(usersRef, (snap) => {
+      const users = [];
+      snap.forEach((d) => users.push({ docId: d.id, ...d.data() }));
+
+      users.sort((a, b) => String(a.email || "").localeCompare(String(b.email || ""), "pt-BR"));
+      usersListEl.innerHTML = "";
+
+      if (!users.length) {
+        emptyUsersEl.style.display = "block";
+        return;
+      }
+      emptyUsersEl.style.display = "none";
+
+      for (const u of users) usersListEl.appendChild(renderUserRow(u));
+    }, (err) => {
+      console.error("READ USERS ERROR:", err);
+      showMsg("Erro ao ler usuários: " + (err?.message || String(err)), "error");
+    });
+  }
+
+  function renderUserRow(u) {
+    const wrap = document.createElement("div");
+    wrap.className = "userCard";
+
+    const uid = u.uid || u.docId;
+    const email = u.email || "(sem email)";
+    const perms = (u.permissions && typeof u.permissions === "object") ? u.permissions : {};
+
+    const permHtml = MENU_PERMS.map(p => {
+      const checked = perms[p.id] !== false;
+      return `
+        <label class="permItem" style="margin:0;">
+          <input type="checkbox" data-uid="${escapeHTML(uid)}" data-perm="${escapeHTML(p.id)}" ${checked ? "checked" : ""} />
+          <div>
+            <div style="font-weight:900;">${escapeHTML(p.label)}</div>
+            <div class="muted small">Permissão: <code>${escapeHTML(p.id)}</code></div>
+          </div>
+        </label>
+      `;
+    }).join("");
+
+    wrap.innerHTML = `
+      <div class="userMeta">
+        <div style="font-weight:900;">${escapeHTML(email)}</div>
+        <div class="muted small">UID: ${escapeHTML(uid)}</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+          <span class="pill">Coleção: <code>active_users</code></span>
+        </div>
+
+        <div class="permGrid" style="margin-top:10px;">
+          ${permHtml}
+        </div>
+
+        <div class="rowActions">
+          <button class="btn btnOutline small2" data-action="savePerms" data-uid="${escapeHTML(uid)}">Salvar permissões</button>
+          <button class="btn btnOutline small2" data-action="removeUser" data-uid="${escapeHTML(uid)}" style="border-color: rgba(244,67,54,.55);">Remover acesso</button>
+        </div>
+      </div>
+    `;
+
+    wrap.querySelector("[data-action='savePerms']").addEventListener("click", async (e) => {
+      await savePerms(e.currentTarget.dataset.uid);
+    });
+    wrap.querySelector("[data-action='removeUser']").addEventListener("click", async (e) => {
+      await removeUser(e.currentTarget.dataset.uid);
+    });
+
+    return wrap;
+  }
+
+  async function savePerms(uid) {
+    showMsg("");
+
+    const perms = {};
+    document.querySelectorAll(`input[type="checkbox"][data-uid="${CSS.escape(uid)}"][data-perm]`).forEach(cb => {
+      perms[cb.dataset.perm] = cb.checked;
+    });
+
+    try {
+      await updateDoc(doc(db, "active_users", uid), {
+        permissions: perms,
+        updatedAt: serverTimestamp(),
+        updatedBy: { uid: currentUser.uid, email: currentUser.email || null }
+      });
+      showMsg("Permissões atualizadas.", "ok");
+    } catch (e) {
+      console.error("SAVE PERMS ERROR:", e);
+      showMsg(e?.message || String(e), "error");
+    }
+  }
+
+  async function removeUser(uid) {
+    showMsg("");
+    if (!confirm("Tem certeza que deseja remover o acesso deste usuário?")) return;
+
+    try {
+      await deleteDoc(doc(db, "active_users", uid));
+      showMsg("Acesso removido (doc apagado em active_users).", "ok");
+    } catch (e) {
+      console.error("REMOVE USER ERROR:", e);
+      showMsg(e?.message || String(e), "error");
+    }
+  }
+</script>
+</body>
+</html>

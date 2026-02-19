@@ -1,0 +1,17 @@
+{
+  "name": "FP-FightReplay",
+  "short_name": "FP-FR",
+  "description": "FP-FightReplay - acionamento e replay de lances",
+  "start_url": "login.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b0b0b",
+  "theme_color": "#d10000",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
