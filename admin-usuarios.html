@@ -30,6 +30,42 @@
       border-radius: 12px;
       margin-top: 12px;
     }
+
+    /* ✅ AJUSTES PARA CELULAR: garantir que os cards fiquem dentro da tela */
+    @media (max-width: 767.98px) {
+      .userCard {
+        flex-direction: column; /* Empilha verticalmente em telas pequenas */
+        gap: 8px; /* Reduz gap para economizar espaço */
+        padding: 10px; /* Reduz padding */
+      }
+      .userMeta {
+        width: 100%; /* Ocupa toda a largura */
+      }
+      .permGrid {
+        grid-template-columns: 1fr; /* Uma coluna em telas pequenas para evitar overflow */
+        gap: 8px;
+      }
+      .permItem {
+        padding: 8px; /* Reduz padding */
+        gap: 8px;
+      }
+      .rowActions {
+        justify-content: flex-start; /* Alinha à esquerda em telas pequenas */
+        gap: 8px;
+      }
+      .tabsRow {
+        flex-direction: column; /* Empilha tabs verticalmente se necessário */
+        gap: 8px;
+      }
+      .tabBtn {
+        padding: 8px 10px; /* Reduz padding */
+      }
+    }
+
+    /* Garantir que o container não cause overflow horizontal */
+    .container {
+      overflow-x: hidden;
+    }
   </style>
 </head>
 
